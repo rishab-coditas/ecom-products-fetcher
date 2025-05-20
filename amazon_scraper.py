@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 import os
 import argparse
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Hardcoded API key
 API_KEY = "AC7514647EA44412B4FA5C799F780DEE"
@@ -200,6 +202,39 @@ def process_categories(categories_data, output_dir, total_results=200, batch_siz
     
     return overall_results
 
+# Set up logging
+def setup_logging(output_dir):
+    # Create logs directory
+    logs_dir = os.path.join(output_dir, 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+    
+    # Log file with timestamp
+    log_file = os.path.join(logs_dir, f'scraper_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            RotatingFileHandler(log_file, maxBytes=10000000, backupCount=5),
+            logging.StreamHandler()
+        ]
+    )
+    
+    return log_file
+
+# Add status file function
+def update_status(output_dir, status):
+    status_file = os.path.join(output_dir, 'status.json')
+    current_status = {
+        'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'status': status
+    }
+    with open(status_file, 'w') as f:
+        json.dump(current_status, f, indent=4)
+
+# Modify main function to include status updates
 def main():
     parser = argparse.ArgumentParser(description='Amazon Product Scraper for Multiple Categories')
     parser.add_argument('--categories_file', required=True, help='JSON file containing categories and products')
@@ -210,21 +245,45 @@ def main():
     
     args = parser.parse_args()
     
-    # Read categories from JSON file
-    with open(args.categories_file, 'r') as f:
-        categories_data = json.load(f)
+    # Setup logging
+    log_file = setup_logging(args.output_dir)
+    logging.info("Script started")
     
-    # Process all categories
-    results = process_categories(
-        categories_data,
-        args.output_dir,
-        args.total_results,
-        args.batch_size,
-        args.max_page
-    )
+    # Create PID file
+    pid_file = os.path.join(args.output_dir, 'scraper.pid')
+    with open(pid_file, 'w') as f:
+        f.write(str(os.getpid()))
     
-    print("\nScript completed!")
-    print(f"Results are organized in: {args.output_dir}")
+    try:
+        update_status(args.output_dir, 'RUNNING')
+        logging.info(f"Process ID: {os.getpid()}")
+        
+        # Read categories from JSON file
+        with open(args.categories_file, 'r') as f:
+            categories_data = json.load(f)
+        
+        # Process all categories
+        results = process_categories(
+            categories_data,
+            args.output_dir,
+            args.total_results,
+            args.batch_size,
+            args.max_page
+        )
+        
+        update_status(args.output_dir, 'COMPLETED')
+        logging.info("Script completed successfully!")
+        logging.info(f"Results are organized in: {args.output_dir}")
+        
+    except Exception as e:
+        update_status(args.output_dir, f'ERROR: {str(e)}')
+        logging.error(f"Script failed: {str(e)}")
+        raise
+    
+    finally:
+        # Clean up PID file
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
 
 if __name__ == "__main__":
     main() 
