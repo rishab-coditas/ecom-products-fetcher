@@ -9,7 +9,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 # Hardcoded API key
-API_KEY = "AC7514647EA44412B4FA5C799F780DEE"
+API_KEY = "FB95857366114AC19C1C79E8A401B1AB"
 
 def ensure_directory(directory):
     """Create directory if it doesn't exist"""
